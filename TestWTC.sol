@@ -8,7 +8,7 @@ interface IKYC {
     function kycsLevel(address _addr) external view returns (uint256);
 }
 
-interface WTC-KAP-20 {
+interface KAP20 {
     event Transfer(address indexed from, address indexed to, uint256 tokens);
     event Approval(address indexed tokenOwner, address indexed spender, uint256 tokens);
     
@@ -31,10 +31,10 @@ interface WTC-KAP-20 {
     function adminTransfer(address _from, address _to, uint256 _value) external returns (bool success);
 }
 
-contract TestWTC Token is KAP-20 BitkubChain TestNet{
-    string public constant NAME     = "WTC TestNet";
-    string public constant SYMBOL   = "TestWTC";
-    uint8  public constant DECIMALS = 18;
+contract WTC is KAP20 {
+    string public constant name     = "WTC TestNet";
+    string public constant symbol   = "TestWTC";
+    uint8  public constant decimals = 18;
     uint256 public totalSupply = 500000000000000000000000000;
     
 
