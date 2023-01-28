@@ -31,7 +31,7 @@ contract SafeMath {
 }
 
 
-contract TestWTC is KAP20Interface, SafeMath {
+contract WTC is KAP20Interface, SafeMath {
     string public name;
     string public symbol;
     uint8 public decimals; // 18 decimals is the strongly suggested default, avoid changing it
@@ -47,8 +47,8 @@ contract TestWTC is KAP20Interface, SafeMath {
      * Initializes contract with initial supply tokens to the creator of the contract
      */
     constructor() public {
-        name = "WTC Token on BitkubChain TestNet";
-        symbol = "TestWTC";
+        name = "World Travel Coin";
+        symbol = "WTC";
         decimals = 18;
         _totalSupply = 500000000000000000000000000;
         
