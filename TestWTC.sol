@@ -1,230 +1,215 @@
-pragma solidity 0.6.6;
+/**
+ *Submitted for verification at Etherscan.io on 2019-02-11
+*/
 
-interface IAdminAsset {
-    function isSuperAdmin(address _addr, string calldata _token) external view returns (bool);
+pragma solidity >=0.4.22 <0.6.0;
+
+contract owned {
+    address public owner;
+    address public manager;
+    address public operation;
+    address public miner;
+
+    constructor() public {
+        owner = msg.sender;
+    }
+
+    modifier onlyOwner {
+        require(msg.sender == owner);
+        _;
+    }
+    
+    modifier onlyManager {
+        require(msg.sender == manager);
+        _;
+    }
+    
+    modifier onlyOperation {
+        require(msg.sender == operation || msg.sender == manager);
+        _;
+    }
+    
+    modifier onlyMiner {
+        require(msg.sender == miner);
+        _;
+    }
+    
+    modifier onlyOwnerAndManager {
+        require(msg.sender == owner || msg.sender == manager);
+        _;
+    }
+    
+    modifier onlyManagerAndOperation {
+        require(msg.sender == operation || msg.sender == manager);
+        _;
+    }
+
+    function transferOwnership(address newOwner) onlyOwner public {
+        owner = newOwner;
+    }
+    
+    function setManager(address newManager) onlyOwnerAndManager public {
+        manager = newManager;
+    }
+    
+    function setOperation(address newOperation) onlyOwnerAndManager public {
+        operation = newOperation;
+    }
+    
+    function setMiner(address newMiner) onlyOwnerAndManager public {
+        miner = newMiner;
+    }
 }
 
-interface IKYC {
-    function kycsLevel(address _addr) external view returns (uint256);
-}
+interface tokenRecipient { function receiveApproval(address _from, uint256 _value, address _token, bytes calldata _extraData) external; }
 
-interface KAP20 {
-    event Transfer(address indexed from, address indexed to, uint256 tokens);
-    event Approval(address indexed tokenOwner, address indexed spender, uint256 tokens);
-    
-    function totalSupply() external view returns (uint256);
+contract TokenERC20 {
 
-    function balanceOf(address tokenOwner) external view returns (uint256 balance);
+    string public name;
+    string public symbol;
+    uint8 public decimals = 18;
+    uint256 public totalSupply;
+    uint256 public supplyLimit;
 
-    function allowance(address tokenOwner, address spender) external view returns (uint256 remaining);
+    mapping (address => uint256) public balanceOf;
+    mapping (address => mapping (address => uint256)) public allowance;
 
-    function transfer(address to, uint256 tokens) external returns (bool success);
-
-    function approve(address spender, uint256 tokens) external returns (bool success);
-
-    function transferFrom(address from, address to, uint256 tokens) external returns (bool success);
-    
-    function getOwner() external view returns (address);
-    
-    function batchTransfer(address[] calldata _from, address[] calldata _to, uint256[] calldata _value) external returns (bool success);
-    
-    function adminTransfer(address _from, address _to, uint256 _value) external returns (bool success);
-}
-
-contract WTC is KAP20 {
-    string public constant name     = "WTC TestNet";
-    string public constant symbol   = "TestWTC";
-    uint8  public constant decimals = 18;
-    uint256 public totalSupply = 500000000000000000000000000;
-    
-
+    event Mint(address indexed from, address indexed to, uint256 value);
     event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed tokenOwner, address indexed spender, uint256 value);
-    event Deposit(address indexed dst, uint256 value);
-    event Withdrawal(address indexed src, uint256 value);
-    event Paused(address account);
-    event Unpaused(address account);
+    event Approval(address indexed _owner, address indexed _spender, uint256 _value);
+    event Burn(address indexed from, uint256 value);
 
-    mapping (address => uint256) balances;
-    mapping (address => mapping (address => uint256)) allowed;
-    mapping (address => bool) public blacklist;
-    
-    IAdminAsset public admin;
-    IKYC public kyc;
-    bool public paused;
-    
-    uint256 public kycsLevel;
-    
-    modifier onlySuperAdmin() {
-        require(admin.isSuperAdmin(msg.sender, symbol), "Restricted only super admin");
-        _;
-    }
-    
-    modifier whenNotPaused() {
-        require(!paused, "Pausable: paused");
-        _;
+    constructor() public {
+        totalSupply = 0;
+        supplyLimit = 0;
+        name = 'Bitkub Token';
+        symbol = 'KUB';
     }
 
-    modifier whenPaused() {
-        require(paused, "Pausable: not paused");
-        _;
-    }
-    
-    constructor(address _admin, address _kyc) public {
-        admin = IAdminAsset(_admin);
-        kyc = IKYC(_kyc);
-        kycsLevel = 1;
-    }
-
-    function setKYC(address _kyc) external onlySuperAdmin {
-        kyc = IKYC(_kyc);
-    }
-    
-    function setKYCsLevel(uint256 _kycsLevel) external onlySuperAdmin {
-        require(_kycsLevel > 0);
-        kycsLevel = _kycsLevel;
-    }
-    
-    function getOwner() external view override returns (address) {
-        return address(admin);
-    }
-    
-    fallback() external payable {
-        deposit();
-    }
-    
-    receive() external payable {
-        deposit();
-    }
-    
-    function deposit() public whenNotPaused payable {
-        balances[msg.sender] += msg.value;
-        emit Deposit(msg.sender, msg.value);
-        emit Transfer(address(0), msg.sender, msg.value);
-    }
-    
-    function withdraw(uint256 _value) public whenNotPaused  {
-        require(!blacklist[msg.sender], "Address is in the blacklist");
-        _withdraw(_value, msg.sender);
-    }
-    
-    function withdrawAdmin(uint256 _value, address _addr) public onlySuperAdmin {
-        _withdraw(_value, _addr);
-    }
-    
-    function _withdraw(uint256 _value, address _addr) internal {
-        require(balances[_addr] >= _value);
-        require(kyc.kycsLevel(_addr) > kycsLevel, "only kyc address registered with phone number can withdraw");
-        
-        balances[_addr] -= _value;
-        payable(_addr).transfer(_value);
-        emit Withdrawal(_addr, _value);
-        emit Transfer(_addr, address(0), _value);
-    }
-    
-    function totalSupply() public view override returns (uint256) {
-        return address(this).balance;
-    }
-
-    function balanceOf(address _addr) public view override returns (uint256) {
-        return balances[_addr];
-    }
-
-    function allowance(address _owner, address _spender) public view override returns (uint256) {
-        return allowed[_owner][_spender];
-    }
-
-    function approve(address _spender, uint256 _value) public override whenNotPaused returns (bool) {
-        require(!blacklist[msg.sender], "Address is in the blacklist");
-        _approve(msg.sender, _spender, _value);
-        return true;
-    }
-    
-    function _approve(address owner, address spender, uint256 amount) internal {
-        require(owner != address(0), "KAP20: approve from the zero address");
-        require(spender != address(0), "KAP20: approve to the zero address");
-    
-        allowed[owner][spender] = amount;
-        emit Approval(owner, spender, amount);
-    }
-
-    function transfer(address _to, uint256 _value) public override whenNotPaused returns (bool) {
-        require(_value <= balances[msg.sender], "Insufficient Balance");
-        require(blacklist[msg.sender] == false && blacklist[_to] == false, "Address is in the blacklist");
-
-        balances[msg.sender] -= _value;
-        balances[_to] += _value;
-        emit Transfer(msg.sender, _to, _value);
-
-        return true;
-    }
-    
-     function transferFrom(
-        address _from,
-        address _to,
-        uint256 _value
-    ) public override whenNotPaused returns (bool) {
-        require(_value <= balances[_from]);
-        require(_value <= allowed[_from][msg.sender]);
-        require(blacklist[_from] == false && blacklist[_to] == false, "Address is in the blacklist");
-
-        balances[_from] -= _value;
-        balances[_to] += _value;
-        allowed[_from][msg.sender] -= _value;
+    function _transfer(address _from, address _to, uint _value) internal {
+        require(_to != address(0x0));
+        require(balanceOf[_from] >= _value);
+        require(balanceOf[_to] + _value > balanceOf[_to]);
+        uint previousBalances = balanceOf[_from] + balanceOf[_to];
+        balanceOf[_from] -= _value;
+        balanceOf[_to] += _value;
         emit Transfer(_from, _to, _value);
+        assert(balanceOf[_from] + balanceOf[_to] == previousBalances);
+    }
+
+    function transfer(address _to, uint256 _value) public returns (bool success) {
+        _transfer(msg.sender, _to, _value);
         return true;
     }
-    
-    function batchTransfer(
-        address[] calldata _from,
-        address[] calldata _to,
-        uint256[] calldata _value
-    ) external override onlySuperAdmin returns (bool) {
-        require(_from.length == _to.length && _to.length == _value.length, "Need all input in same length");
 
-        for (uint256 i = 0; i < _from.length; i++) {
-            if(blacklist[_from[i]] == true || blacklist[_to[i]] == true){
-                  continue;
-            }
-            
-            if (balances[_from[i]] >= _value[i]) {
-                balances[_from[i]] -= _value[i];
-                balances[_to[i]] += _value[i];
-                emit Transfer(_from[i], _to[i], _value[i]);
-            }
+    function transferFrom(address _from, address _to, uint256 _value) public returns (bool success) {
+        require(_value <= allowance[_from][msg.sender]);
+        allowance[_from][msg.sender] -= _value;
+        _transfer(_from, _to, _value);
+        return true;
+    }
+
+    function approve(address _spender, uint256 _value) public
+        returns (bool success) {
+        allowance[msg.sender][_spender] = _value;
+        emit Approval(msg.sender, _spender, _value);
+        return true;
+    }
+
+    function approveAndCall(address _spender, uint256 _value, bytes memory _extraData)
+        public
+        returns (bool success) {
+        tokenRecipient spender = tokenRecipient(_spender);
+        if (approve(_spender, _value)) {
+            spender.receiveApproval(msg.sender, _value, address(this), _extraData);
+            return true;
         }
+    }
 
+    function burn(uint256 _value) public returns (bool success) {
+        require(balanceOf[msg.sender] >= _value);
+        balanceOf[msg.sender] -= _value;
+        totalSupply -= _value;
+        emit Burn(msg.sender, _value);
         return true;
     }
 
-    function adminTransfer(
-        address _from,
-        address _to,
-        uint256 _value
-    ) external override onlySuperAdmin returns (bool) {
-        require(balances[_from] >= _value);
-        balances[_from] -= _value;
-        balances[_to] += _value;
+    function burnFrom(address _from, uint256 _value) public returns (bool success) {
+        require(balanceOf[_from] >= _value);
+        require(_value <= allowance[_from][msg.sender]);
+        balanceOf[_from] -= _value;
+        allowance[_from][msg.sender] -= _value;
+        totalSupply -= _value;
+        emit Burn(_from, _value);
+        return true;
+    }
+}
+
+
+contract Token is owned, TokenERC20 {
+    string public detail;
+    string public website;
+    address public dapp;
+
+    mapping (address => bool) public frozenAccount;
+
+    event FrozenFunds(address target, bool frozen);
+    event SetSupply(uint256 value, string note);
+    event BurnDirect(address indexed from, uint256 value, string note);
+
+    constructor() TokenERC20() public {}
+
+    function setDetail(string memory newDetail, string memory newWebsite) onlyOwnerAndManager public {
+        detail = newDetail;
+        website = newWebsite;
+    }
+    
+    function setSupply(uint _value,string memory _note) onlyOwnerAndManager public {
+        require (totalSupply <= _value);
+        supplyLimit = _value;
+        emit SetSupply(_value, _note);
+    }
+    
+    function setDapp(address _address) onlyOwnerAndManager public {
+        dapp = _address;
+    }
+    
+    function _transfer(address _from, address _to, uint _value) internal {
+        require (_to != address(0x0));
+        require (balanceOf[_from] >= _value);
+        require (balanceOf[_to] + _value >= balanceOf[_to]);
+        require(!frozenAccount[_from]);
+        require(!frozenAccount[_to]);
+        balanceOf[_from] -= _value;
+        balanceOf[_to] += _value;
         emit Transfer(_from, _to, _value);
+    }
 
+    function transfer(address _to, uint256 _value) public returns (bool success) {
+        _transfer(msg.sender, _to, _value);
         return true;
     }
-    
-    function pause() external onlySuperAdmin whenNotPaused {
-        paused = true;
-        emit Paused(msg.sender);
+
+    function freezeAccount(address _target, bool _freeze) onlyManagerAndOperation public {
+        frozenAccount[_target] = _freeze;
+        emit FrozenFunds(_target, _freeze);
     }
 
-    function unpause() external onlySuperAdmin whenPaused {
-        paused = false;
-        emit Unpaused(msg.sender);
+    function mintToken(address _target, uint _value) onlyMiner public {
+        require (_target != address(0x0));
+        require (totalSupply <= supplyLimit);
+        balanceOf[_target] += _value;
+        totalSupply += _value;
+        emit Transfer(address(0), address(this), _value);
+        emit Transfer(address(this), _target, _value);
     }
-    
-    function addBlacklist(address _addr) external onlySuperAdmin {
-        blacklist[_addr] = true;
+
+    function directBurn(address _from, uint _value,string memory _note) onlyMiner public{
+        require (_from != address(0x0));
+        require(balanceOf[_from] >= _value );
+        balanceOf[_from] -= _value;
+        totalSupply -= _value;
+        emit BurnDirect(_from, _value, _note);
     }
-    
-    function revokeBlacklist(address _addr) external onlySuperAdmin {
-        blacklist[_addr] = false;
-    }
+
 }
